@@ -48,4 +48,4 @@ A continuación, se describen las tablas principales que componen la base de dat
   - `OrderID`: Relación con la tabla de órdenes para identificar a qué orden pertenece el detalle.
   - `ProductID`: Relación con la tabla de productos para identificar qué producto fue adquirido.
   - `Quantity`: Cantidad de productos adquiridos.
-  - `UnitPrice`: Precio unitario del producto.
+  - `UnitPrice`: Precio unitario del producto.# Segunda-Entrega-SQL-Coderhouse
