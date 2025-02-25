@@ -36,9 +36,11 @@ CREATE TABLE Orders (
     OrderID INT AUTO_INCREMENT PRIMARY KEY,
     OrderDate DATETIME NOT NULL,
     CustomerID INT,
-    TotalAmount DECIMAL(10, 2) NOT NULL,
+    TotalAmount DECIMAL(10,2) NOT NULL,
+    IsPaid BOOLEAN NOT NULL DEFAULT FALSE,
     FOREIGN KEY (CustomerID) REFERENCES Customers(CustomerID)
 );
+
 
 -- Tabla Detalles de Órdenes
 CREATE TABLE OrderDetails (
@@ -217,7 +219,7 @@ VALUES
     (9, 5, 2, 78000),
     (10, 18, 1, 18000);
     
-SELECT OrderID FROM Orders; -- Vemos el Detalle
+SELECT * FROM OrderDetails; -- Vemos el Detalle
 
 /* Vistas */
 
@@ -252,7 +254,7 @@ FROM Orders o
 JOIN Customers c ON o.CustomerID = c.CustomerID
 GROUP BY c.CustomerID, c.FirstName, c.LastName, c.Email;
 
-SELECT * FROM View_TotalSalesPerCustomer; -- Vemos las ventas totales por vendedor
+SELECT * FROM View_TotalSalesPerCustomer; -- Vemos las ventas totales por cliente
 
 -- Stock de Productos
 CREATE VIEW View_ProductsStock AS
@@ -307,7 +309,7 @@ FROM Products p
 JOIN Categories c ON p.CategoryID = c.CategoryID
 WHERE p.Stock = 0 OR p.Stock < 5;
 
-SELECT * FROM View_OutOfStockProducts; -- Vista de Productos con Stock = 0
+SELECT * FROM View_OutOfStockProducts; -- Vista de Productos con Stock = 0 o Stock < 5
 
 -- Ordenes Recientes
 CREATE VIEW View_RecentOrders AS
@@ -324,6 +326,191 @@ WHERE o.OrderDate >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)
 ORDER BY o.OrderDate DESC;
 
 SELECT * FROM View_RecentOrders; -- Vista de Ordenes Recientes (1 año)
+
+/* Funciones */
+
+-- Obtener el Precio Total
+DELIMITER //
+CREATE FUNCTION GetTotalPrice(order_id INT) 
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    DECLARE total DECIMAL(10,2);
+    
+    SELECT SUM(Quantity * UnitPrice) INTO total
+    FROM OrderDetails
+    WHERE OrderID = order_id;
+    
+    RETURN total;
+END;
+//
+DELIMITER ;
+
+SELECT GetTotalPrice(1); -- Obtenemos el precio total de la orden de trabajo
+
+-- Verificar Stock de un Producto
+DELIMITER //
+CREATE FUNCTION GetAvailableStock(product_id INT) 
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE stock_count INT;
+    
+    SELECT Stock INTO stock_count 
+    FROM Products 
+    WHERE ProductID = product_id;
+    
+    RETURN stock_count;
+END;
+//
+DELIMITER ;
+
+SELECT GetAvailableStock(1); -- Obtenemos el stock de un producto en especifico
+
+-- Gasto Total por Cliente
+DELIMITER //
+
+CREATE FUNCTION GetCustomerTotalSpent(customer_id INT) 
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    DECLARE total_spent DECIMAL(10,2);
+    
+    SELECT SUM(TotalAmount) INTO total_spent 
+    FROM Orders 
+    WHERE CustomerID = customer_id;
+    
+    RETURN total_spent;
+END;
+//
+
+DELIMITER ;
+
+SELECT GetCustomerTotalSpent(1); -- Obtenemos el gasto total realizado por un cliente
+
+-- Producto mas vendido
+DELIMITER //
+
+CREATE FUNCTION GetBestSellingProduct() 
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE best_product INT;
+
+    -- Obtener el producto más vendido solo de órdenes pagadas
+    SELECT od.ProductID INTO best_product
+    FROM OrderDetails od
+    JOIN Orders o ON od.OrderID = o.OrderID
+    WHERE o.IsPaid = TRUE  -- Solo contar las órdenes pagadas
+    GROUP BY od.ProductID
+    ORDER BY SUM(od.Quantity) DESC
+    LIMIT 1;
+
+    RETURN best_product;
+END;
+//
+
+DELIMITER ;
+
+SELECT GetBestSellingProduct(); -- Obtenemos el producto mejor vendido
+
+-- Cantidad de Productos por Categoria
+DELIMITER //
+
+CREATE FUNCTION GetCategoryProductCount(category_id INT) 
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE product_count INT;
+    
+    SELECT COUNT(*) INTO product_count 
+    FROM Products 
+    WHERE CategoryID = category_id;
+    
+    RETURN product_count;
+END;
+//
+
+DELIMITER ;
+
+SELECT GetCategoryProductCount(1); -- Obtenemos la cantidad de productos por una categoria especifica
+
+-- Ordenes Pagadas
+DELIMITER //
+
+CREATE FUNCTION GetOrderStatus(order_id INT) 
+RETURNS VARCHAR(20)
+DETERMINISTIC
+BEGIN
+    DECLARE status VARCHAR(20);
+
+    -- Verifica si la orden está pagada
+    SELECT IF(IsPaid, 'Paid', 'Pending') INTO status 
+    FROM Orders 
+    WHERE OrderID = order_id;
+
+    RETURN status;
+END;
+//
+
+DELIMITER ;
+
+SELECT GetOrderStatus(1); -- Obtenemos si una orden en especifico fue pagada o no
+
+/* Store Procedure */
+
+-- Pagar Orden de Trabajo
+DELIMITER //
+
+CREATE PROCEDURE ProcessPayment(
+    IN order_id INT  -- ID de la orden a pagar
+)
+BEGIN
+    -- Verificar si la orden ya está pagada
+    IF (SELECT IsPaid FROM Orders WHERE OrderID = order_id) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: La orden ya ha sido pagada';
+    ELSE
+        -- Marcar la orden como pagada
+        UPDATE Orders 
+        SET IsPaid = TRUE 
+        WHERE OrderID = order_id;
+    END IF;
+END;
+//
+
+DELIMITER ;
+
+/* Trigger */
+
+-- Reducir el Stock
+DELIMITER //
+
+CREATE TRIGGER ReduceStockAfterPayment
+AFTER UPDATE ON Orders
+FOR EACH ROW
+BEGIN
+    -- Solo ejecutar si el pago ha cambiado de FALSE a TRUE
+    IF OLD.IsPaid = FALSE AND NEW.IsPaid = TRUE THEN
+        -- Reducir el stock de los productos de la orden
+        UPDATE Products p
+        JOIN OrderDetails od ON p.ProductID = od.ProductID
+        SET p.Stock = p.Stock - od.Quantity
+        WHERE od.OrderID = NEW.OrderID;
+    END IF;
+END;
+//
+
+DELIMITER ;
+
+CALL ProcessPayment(1); -- Aca realizamos el pago y reducimos el stock de los productos de la orden especificada
+CALL ProcessPayment(3); -- Aca realizamos el pago y reducimos el stock de los productos de la orden especificada
+
+
+
+
+
+
 
 
 
