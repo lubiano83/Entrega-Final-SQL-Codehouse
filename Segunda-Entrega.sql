@@ -53,6 +53,16 @@ CREATE TABLE OrderDetails (
     FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
 );
 
+-- Tabla de Auditoria
+CREATE TABLE AuditLog (
+    AuditID INT AUTO_INCREMENT PRIMARY KEY,
+    TableName VARCHAR(50),     -- Nombre de la tabla afectada
+    OperationType VARCHAR(10), -- Tipo de operación (INSERT, UPDATE, DELETE)
+    OldData TEXT,              -- Datos antiguos (para UPDATE y DELETE)
+    NewData TEXT,              -- Datos nuevos (para INSERT y UPDATE)
+    ChangedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Fecha del cambio
+);
+
 /* Ingresando Datos */
 
 -- Categorias
@@ -72,7 +82,7 @@ VALUES
     ('Batería Bosch S4 60Ah', 'Batería de 12V con 60Ah, ideal para autos de gama media', 75000, 10, 1),
     ('Batería Varta Silver 74Ah', 'Batería de alto rendimiento con 74Ah, ideal para autos modernos', 120000, 8, 1),
     ('Batería Hankook 100Ah', 'Batería de 12V con 100Ah, recomendada para vehículos de alto consumo', 150000, 5, 1),
-     ('Batería Exide Premium 77Ah', 'Batería de 12V con 77Ah, ideal para autos de alto rendimiento', 110000, 7, 1),
+	('Batería Exide Premium 77Ah', 'Batería de 12V con 77Ah, ideal para autos de alto rendimiento', 110000, 7, 1),
     
     ('Neumático Michelin 205/55 R16', 'Neumático de alto desempeño para autos de turismo', 90000, 12, 2),
     ('Neumático Bridgestone 195/65 R15', 'Neumático de larga durabilidad para autos medianos', 78000, 15, 2),
@@ -376,17 +386,18 @@ DETERMINISTIC
 BEGIN
     DECLARE total_spent DECIMAL(10,2);
     
-    SELECT SUM(TotalAmount) INTO total_spent 
+    -- Sumar solo el total de órdenes que han sido pagadas
+    SELECT COALESCE(SUM(TotalAmount), 0) INTO total_spent 
     FROM Orders 
-    WHERE CustomerID = customer_id;
-    
+    WHERE CustomerID = customer_id AND IsPaid = TRUE;
+
     RETURN total_spent;
 END;
 //
 
 DELIMITER ;
 
-SELECT GetCustomerTotalSpent(1); -- Obtenemos el gasto total realizado por un cliente
+SELECT GetCustomerTotalSpent(0); -- Obtenemos el gasto total realizado por un cliente
 
 -- Producto mas vendido
 DELIMITER //
@@ -455,9 +466,48 @@ END;
 
 DELIMITER ;
 
-SELECT GetOrderStatus(1); -- Obtenemos si una orden en especifico fue pagada o no
+SELECT GetOrderStatus(2); -- Obtenemos si una orden en especifico fue pagada o no
 
 /* Store Procedure */
+
+-- Actualizacion de Datos
+DELIMITER //
+
+CREATE PROCEDURE GenericCRUD(
+    IN action_type VARCHAR(10),    -- Acción: INSERT, UPDATE o DELETE
+    IN table_name VARCHAR(50),     -- Nombre de la tabla
+    IN column_names TEXT,          -- Columnas a insertar o SET para UPDATE
+    IN values_text TEXT,           -- Valores a insertar (para INSERT)
+    IN condition_text TEXT         -- Condición para UPDATE o DELETE
+)
+BEGIN
+    SET @query = '';
+
+    -- Insertar datos
+    IF action_type = 'INSERT' THEN
+        SET @query = CONCAT('INSERT INTO ', table_name, ' (', column_names, ') VALUES (', values_text, ');');
+
+    -- Actualizar datos
+    ELSEIF action_type = 'UPDATE' THEN
+        SET @query = CONCAT('UPDATE ', table_name, ' SET ', column_names, ' WHERE ', condition_text, ';');
+
+    -- Eliminar datos
+    ELSEIF action_type = 'DELETE' THEN
+        SET @query = CONCAT('DELETE FROM ', table_name, ' WHERE ', condition_text, ';');
+
+    ELSE
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: Acción no válida. Usa INSERT, UPDATE o DELETE.';
+    END IF;
+
+    -- Ejecutar la consulta generada dinámicamente
+    PREPARE stmt FROM @query;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+END;
+//
+
+DELIMITER ;
 
 -- Pagar Orden de Trabajo
 DELIMITER //
@@ -483,6 +533,74 @@ DELIMITER ;
 
 /* Trigger */
 
+-- Registro de INSERT
+DELIMITER //
+
+CREATE TRIGGER AuditLog_Products_Insert
+AFTER INSERT ON Products
+FOR EACH ROW
+BEGIN
+    DECLARE new_data TEXT;
+    
+    -- Capturar datos nuevos (para INSERT)
+    SET new_data = CONCAT('ProductID:', NEW.ProductID, ', Name:', NEW.ProductName, 
+                          ', Price:', NEW.Price, ', Stock:', NEW.Stock, ', CategoryID:', NEW.CategoryID);
+
+    -- Insertar en la tabla de auditoría
+    INSERT INTO AuditLog (TableName, OperationType, OldData, NewData)
+    VALUES ('Products', 'INSERT', NULL, new_data);
+END;
+//
+
+DELIMITER ;
+
+-- Registro de UPDATE
+DELIMITER //
+
+CREATE TRIGGER AuditLog_Products_Update
+AFTER UPDATE ON Products
+FOR EACH ROW
+BEGIN
+    DECLARE old_data TEXT;
+    DECLARE new_data TEXT;
+
+    -- Capturar datos antiguos
+    SET old_data = CONCAT('ProductID:', OLD.ProductID, ', Name:', OLD.ProductName, 
+                          ', Price:', OLD.Price, ', Stock:', OLD.Stock, ', CategoryID:', OLD.CategoryID);
+
+    -- Capturar datos nuevos
+    SET new_data = CONCAT('ProductID:', NEW.ProductID, ', Name:', NEW.ProductName, 
+                          ', Price:', NEW.Price, ', Stock:', NEW.Stock, ', CategoryID:', NEW.CategoryID);
+
+    -- Insertar en la tabla de auditoría
+    INSERT INTO AuditLog (TableName, OperationType, OldData, NewData)
+    VALUES ('Products', 'UPDATE', old_data, new_data);
+END;
+//
+
+DELIMITER ;
+
+-- Registro de DELETE
+DELIMITER //
+
+CREATE TRIGGER AuditLog_Products_Delete
+BEFORE DELETE ON Products
+FOR EACH ROW
+BEGIN
+    DECLARE old_data TEXT;
+
+    -- Capturar los datos antiguos antes de la eliminación
+    SET old_data = CONCAT('ProductID:', OLD.ProductID, ', Name:', OLD.ProductName, 
+                          ', Price:', OLD.Price, ', Stock:', OLD.Stock, ', CategoryID:', OLD.CategoryID);
+
+    -- Insertar en la tabla de auditoría
+    INSERT INTO AuditLog (TableName, OperationType, OldData, NewData)
+    VALUES ('Products', 'DELETE', old_data, NULL);
+END;
+//
+
+DELIMITER ;
+
 -- Reducir el Stock
 DELIMITER //
 
@@ -503,8 +621,44 @@ END;
 
 DELIMITER ;
 
+/* Tablero de Control */
+
 CALL ProcessPayment(1); -- Aca realizamos el pago y reducimos el stock de los productos de la orden especificada
 CALL ProcessPayment(3); -- Aca realizamos el pago y reducimos el stock de los productos de la orden especificada
+
+-- Insertar datos
+CALL GenericCRUD(
+    'INSERT',
+    'Products',
+    'ProductName, Description, Price, Stock, CategoryID',
+    "'Neumático Michelin', 'Neumático para autos de alto rendimiento', 120000, 50, 2",
+    NULL
+);
+
+-- Actualizar datos
+CALL GenericCRUD(
+    'UPDATE',
+    'Products',
+    "Price = 110000, Stock = 45, Description = 'Neumático con nueva versión mejorada'",
+    NULL,
+    'ProductID = 23'
+);
+
+-- Eliminar datos
+CALL GenericCRUD(
+    'DELETE',
+    'Products',
+    NULL,
+    NULL,
+    'ProductID = 23'
+);
+
+SELECT * FROM products; -- Revisamos la lista de productos
+SELECT * FROM AuditLog; -- Revisamos la tabla de auditoria
+
+
+
+
 
 
 
