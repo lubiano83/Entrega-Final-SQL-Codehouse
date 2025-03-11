@@ -319,7 +319,7 @@ FROM Products p
 JOIN Categories c ON p.CategoryID = c.CategoryID
 WHERE p.Stock = 0 OR p.Stock < 5;
 
-SELECT * FROM View_OutOfStockProducts; -- Vista de Productos con Stock = 0 o Stock < 5
+SELECT * FROM View_OutOfStockProducts; -- Vista de Productos con Stock = 0 o Stock < 5 (si no hay algun producto con stock menor o igual a 5, la tabla estara vacia)
 
 -- Ordenes Recientes
 CREATE VIEW View_RecentOrders AS
@@ -335,7 +335,7 @@ JOIN Customers c ON o.CustomerID = c.CustomerID
 WHERE o.OrderDate >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)
 ORDER BY o.OrderDate DESC;
 
-SELECT * FROM View_RecentOrders; -- Vista de Ordenes Recientes (1 año)
+SELECT * FROM View_RecentOrders; -- Vista de Ordenes Recientes (1 año), si no hay alguna orden dentro del ultimo año, la tabla se vera vacia
 
 /* Funciones */
 
@@ -397,7 +397,7 @@ END;
 
 DELIMITER ;
 
-SELECT GetCustomerTotalSpent(0); -- Obtenemos el gasto total realizado por un cliente
+SELECT GetCustomerTotalSpent(0); -- Obtenemos el gasto total realizado por un cliente, esto debe estar pagado para que cuente
 
 -- Producto mas vendido
 DELIMITER //
@@ -423,7 +423,7 @@ END;
 
 DELIMITER ;
 
-SELECT GetBestSellingProduct(); -- Obtenemos el producto mejor vendido
+SELECT GetBestSellingProduct(); -- Obtenemos el producto mejor vendido, esto debe estar pagado para que cuente
 
 -- Cantidad de Productos por Categoria
 DELIMITER //
@@ -641,7 +641,7 @@ CALL GenericCRUD(
     'Products',
     "Price = 110000, Stock = 45, Description = 'Neumático con nueva versión mejorada'",
     NULL,
-    'ProductID = 23'
+    'ProductID = 21'
 );
 
 -- Eliminar datos
@@ -650,7 +650,7 @@ CALL GenericCRUD(
     'Products',
     NULL,
     NULL,
-    'ProductID = 23'
+    'ProductID = 21'
 );
 
 SELECT * FROM products; -- Revisamos la lista de productos
