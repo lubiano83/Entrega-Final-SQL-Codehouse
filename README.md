@@ -164,4 +164,4 @@ CALL ProcessPayment(1); -- Reduce stock automáticamente
 ✅ **`STORED PROCEDURES`** → CRUD dinámico y procesamiento de pagos.
 ✅ **`TRIGGERS`** → Auditoría de cambios y reducción automática de stock.
 
-🚀 **¡Base de datos completamente funcional y optimizada para AutoPartsStore!**
+🚀 **¡Base de datos completamente funcional y optimizada para AutoPartsStore!**# Entrega-Final-SQL-Codehouse
