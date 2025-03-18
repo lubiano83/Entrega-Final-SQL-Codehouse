@@ -282,18 +282,20 @@ JOIN Categories c ON p.CategoryID = c.CategoryID;
 SELECT * FROM View_ProductsStock; -- Vemos el stock actual de los productos
 
 -- Productos mas vendidos
-CREATE VIEW View_BestSellingProducts AS
+CREATE OR REPLACE VIEW View_BestSellingProducts AS
 SELECT 
     p.ProductID,
     p.ProductName,
-    SUM(od.Quantity) AS TotalSold,
-    SUM(od.Quantity * od.UnitPrice) AS TotalRevenue
+    COALESCE(SUM(od.Quantity), 0) AS TotalSold,
+    COALESCE(SUM(od.Quantity * od.UnitPrice), 0) AS TotalRevenue
 FROM OrderDetails od
+JOIN Orders o ON od.OrderID = o.OrderID
 JOIN Products p ON od.ProductID = p.ProductID
+WHERE o.IsPaid = TRUE
 GROUP BY p.ProductID, p.ProductName
 ORDER BY TotalSold DESC;
 
-SELECT * FROM View_BestSellingProducts ORDER BY TotalRevenue DESC; -- Vemos el listado de productos mas vendidos de forma descendente
+SELECT * FROM View_BestSellingProducts ORDER BY TotalRevenue DESC; -- Vemos el listado de productos mas vendidos de forma descendente (los que ya estan pagados)
 
 -- Resumen de Ordenes
 CREATE VIEW View_OrderSummary AS
@@ -303,11 +305,12 @@ SELECT
     c.FirstName AS CustomerFirstName,
     c.LastName AS CustomerLastName,
     c.Email AS CustomerEmail,
-    o.TotalAmount
+    o.TotalAmount,
+    o.isPAid
 FROM Orders o
 JOIN Customers c ON o.CustomerID = c.CustomerID;
 
-SELECT * FROM View_OrderSummary; -- Vista de Resumen de Ordenes
+SELECT * FROM View_OrderSummary; -- Vista de Resumen de Ordenes y verificamos si estan pagadas o no
 
 -- Productos fuera de Stock
 CREATE VIEW View_OutOfStockProducts AS

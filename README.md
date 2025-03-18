@@ -1,167 +1,167 @@
-# AutoPartsStore - Documentación de Base de Datos
+# AutoPartsStore - Base de Datos
 
-## 📌 Descripción General
-**AutoPartsStore** es una base de datos diseñada para gestionar la venta de autopartes, incluyendo clientes, productos, órdenes y auditoría de operaciones.
+## Descripción
+Este proyecto implementa un sistema de base de datos para una tienda de autopartes utilizando MySQL. Incluye la estructura de tablas, inserción de datos, vistas, funciones, procedimientos almacenados y triggers para gestionar productos, órdenes y auditoría.
 
-La base de datos incluye:
-- **Tablas**: Clientes, Productos, Categorías, Órdenes, Detalles de Órdenes y Auditoría.
-- **Funciones (`FUNCTION`)**: Para cálculos como total de órdenes, stock disponible y ventas de clientes.
-- **Procedimientos (`STORED PROCEDURES`)**: Para CRUD dinámico y gestión de pagos.
-- **Disparadores (`TRIGGERS`)**: Para auditoría de cambios y reducción automática de stock.
-- **Vistas (`VIEWS`)**: Para reportes como productos más vendidos y órdenes recientes.
+## Estructura de la Base de Datos
 
----
-
-## 📂 Estructura de la Base de Datos
-
-### 📌 Tablas Principales
-- **Categories**: Categorías de productos.
-- **Products**: Productos de autopartes.
-- **Customers**: Clientes registrados.
-- **Orders**: Órdenes de compra.
-- **OrderDetails**: Detalles de cada orden.
-- **AuditLog**: Registro de auditoría.
-
----
-
-## 🔹 Vistas (`VIEWS`)
-
-### **1️⃣ `View_OrdersDetails`** - Detalle de órdenes
-📌 **Descripción**: Muestra información completa de las órdenes, incluyendo los productos comprados, clientes y montos.
+### 1. Creación de la Base de Datos
 ```sql
+CREATE DATABASE AutoPartsStore;
+USE AutoPartsStore;
+```
+
+### 2. Tablas Principales
+
+#### **Categorías**
+```sql
+CREATE TABLE Categories (
+    CategoryID INT AUTO_INCREMENT PRIMARY KEY,
+    CategoryName VARCHAR(50) NOT NULL,
+    Description VARCHAR(100)
+);
+```
+
+#### **Productos**
+```sql
+CREATE TABLE Products (
+    ProductID INT AUTO_INCREMENT PRIMARY KEY,
+    ProductName VARCHAR(50) NOT NULL,
+    Description VARCHAR(100),
+    Price DECIMAL(10, 2) NOT NULL,
+    Stock INT NOT NULL,
+    CategoryID INT NOT NULL,
+    FOREIGN KEY (CategoryID) REFERENCES Categories(CategoryID)
+);
+```
+
+#### **Clientes**
+```sql
+CREATE TABLE Customers (
+    CustomerID INT AUTO_INCREMENT PRIMARY KEY,
+    FirstName VARCHAR(50) NOT NULL,
+    LastName VARCHAR(50) NOT NULL,
+    Email VARCHAR(50) UNIQUE NOT NULL,
+    Phone VARCHAR(12),
+    Address VARCHAR(75)
+);
+```
+
+#### **Órdenes**
+```sql
+CREATE TABLE Orders (
+    OrderID INT AUTO_INCREMENT PRIMARY KEY,
+    OrderDate DATETIME NOT NULL,
+    CustomerID INT,
+    TotalAmount DECIMAL(10,2) NOT NULL,
+    IsPaid BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (CustomerID) REFERENCES Customers(CustomerID)
+);
+```
+
+#### **Detalles de Órdenes**
+```sql
+CREATE TABLE OrderDetails (
+    OrderDetailID INT AUTO_INCREMENT PRIMARY KEY,
+    OrderID INT,
+    ProductID INT,
+    Quantity INT NOT NULL,
+    UnitPrice DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (OrderID) REFERENCES Orders(OrderID),
+    FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
+);
+```
+
+#### **Auditoría**
+```sql
+CREATE TABLE AuditLog (
+    AuditID INT AUTO_INCREMENT PRIMARY KEY,
+    TableName VARCHAR(50),
+    OperationType VARCHAR(10),
+    OldData TEXT,
+    NewData TEXT,
+    ChangedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Vistas
+
+- **Detalle de Órdenes** (`View_OrdersDetails`):
+  Muestra información detallada de cada orden, incluyendo productos y clientes.
+
+- **Ventas por Clientes** (`View_TotalSalesPerCustomer`):
+  Muestra el total gastado por cliente, solo considerando órdenes pagadas.
+
+- **Stock de Productos** (`View_ProductsStock`):
+  Muestra el stock disponible de cada producto.
+
+- **Productos más Vendidos** (`View_BestSellingProducts`):
+  Muestra los productos más vendidos en órdenes pagadas.
+
+- **Resumen de Órdenes** (`View_OrderSummary`):
+  Muestra un resumen de las órdenes con estado de pago.
+
+- **Productos fuera de Stock** (`View_OutOfStockProducts`):
+  Muestra productos con stock bajo o agotados.
+
+- **Órdenes Recientes** (`View_RecentOrders`):
+  Muestra órdenes realizadas en el último año.
+
+## Funciones
+
+- `GetTotalPrice(order_id INT)`: Obtiene el total de una orden.
+- `GetAvailableStock(product_id INT)`: Obtiene el stock disponible de un producto.
+- `GetCustomerTotalSpent(customer_id INT)`: Obtiene el total gastado por un cliente en órdenes pagadas.
+- `GetBestSellingProduct()`: Devuelve el ID del producto más vendido en órdenes pagadas.
+- `GetCategoryProductCount(category_id INT)`: Cuenta la cantidad de productos en una categoría.
+- `GetOrderStatus(order_id INT)`: Devuelve el estado de pago de una orden.
+
+## Procedimientos Almacenados
+
+- `GenericCRUD(action_type, table_name, column_names, values_text, condition_text)`: Realiza operaciones dinámicas de INSERT, UPDATE y DELETE.
+- `ProcessPayment(order_id INT)`: Marca una orden como pagada y reduce el stock de productos de la orden.
+
+## Triggers
+
+- **Auditoría en Productos**:
+  - `AuditLog_Products_Insert`: Guarda registros de inserción.
+  - `AuditLog_Products_Update`: Guarda registros de actualización.
+  - `AuditLog_Products_Delete`: Guarda registros de eliminación.
+
+- **Reducción Automática de Stock**:
+  - `ReduceStockAfterPayment`: Reduce el stock después de marcar una orden como pagada.
+
+## Tablero de Control
+
+### Procesamiento de Pagos
+```sql
+CALL ProcessPayment(1);
+CALL ProcessPayment(3);
+```
+
+### CRUD Genérico
+```sql
+-- Insertar datos
+CALL GenericCRUD('INSERT', 'Products', 'ProductName, Description, Price, Stock, CategoryID', "'Neumático Michelin', 'Neumático para autos de alto rendimiento', 120000, 50, 2", NULL);
+
+-- Actualizar datos
+CALL GenericCRUD('UPDATE', 'Products', "Price = 110000, Stock = 45, Description = 'Neumático con nueva versión mejorada'", NULL, 'ProductID = 21');
+
+-- Eliminar datos
+CALL GenericCRUD('DELETE', 'Products', NULL, NULL, 'ProductID = 21');
+```
+
+### Consultas Útiles
+```sql
+SELECT * FROM Products;
+SELECT * FROM AuditLog;
+SELECT * FROM View_BestSellingProducts ORDER BY TotalRevenue DESC;
 SELECT * FROM View_OrdersDetails ORDER BY OrderID;
 ```
 
-### **2️⃣ `View_TotalSalesPerCustomer`** - Total de Ventas por Cliente
-📌 **Descripción**: Muestra cuánto ha gastado cada cliente.
-```sql
-SELECT * FROM View_TotalSalesPerCustomer;
-```
+## Notas Finales
+- Se han agregado validaciones en procedimientos y triggers para evitar inconsistencias.
+- El sistema ahora permite gestionar pagos y stock de manera automática.
+- La auditoría garantiza el rastreo de cambios en productos.
 
-### **3️⃣ `View_ProductsStock`** - Stock de Productos
-📌 **Descripción**: Muestra el stock actual de cada producto con su categoría.
-```sql
-SELECT * FROM View_ProductsStock;
-```
-
-### **4️⃣ `View_BestSellingProducts`** - Productos Más Vendidos
-📌 **Descripción**: Muestra los productos más vendidos en términos de cantidad y total de ingresos.
-```sql
-SELECT * FROM View_BestSellingProducts ORDER BY TotalRevenue DESC;
-```
-
-### **5️⃣ `View_OutOfStockProducts`** - Productos Agotados o con Bajo Stock
-📌 **Descripción**: Muestra productos con stock = 0 o menor a 5.
-```sql
-SELECT * FROM View_OutOfStockProducts;
-```
-
-### **6️⃣ `View_RecentOrders`** - Órdenes Recientes (Último Año)
-📌 **Descripción**: Muestra las órdenes realizadas en el último año, ordenadas por fecha.
-```sql
-SELECT * FROM View_RecentOrders;
-```
-
----
-
-## 🔹 Funciones (`FUNCTION`)
-
-### **1️⃣ `GetTotalPrice(order_id INT)`** - Total de una Orden
-📌 **Descripción**: Calcula el total de una orden sumando `Cantidad * PrecioUnitario`.
-```sql
-SELECT GetTotalPrice(1);
-```
-
-### **2️⃣ `GetAvailableStock(product_id INT)`** - Verificar Stock Disponible
-📌 **Descripción**: Devuelve el stock actual de un producto específico.
-```sql
-SELECT GetAvailableStock(1);
-```
-
-### **3️⃣ `GetCustomerTotalSpent(customer_id INT)`** - Total Gastado por Cliente
-📌 **Descripción**: Calcula cuánto ha gastado un cliente en órdenes pagadas.
-```sql
-SELECT GetCustomerTotalSpent(1);
-```
-
-### **4️⃣ `GetBestSellingProduct()`** - Producto Más Vendido
-📌 **Descripción**: Devuelve el `ProductID` del producto más vendido en órdenes pagadas.
-```sql
-SELECT GetBestSellingProduct();
-```
-
-### **5️⃣ `GetOrderStatus(order_id INT)`** - Estado de una Orden
-📌 **Descripción**: Devuelve `Paid` o `Pending` según el estado de pago de la orden.
-```sql
-SELECT GetOrderStatus(2);
-```
-
----
-
-## 🔹 Procedimientos (`STORED PROCEDURES`)
-
-### **1️⃣ `GenericCRUD`** - Procedimiento Genérico para `INSERT`, `UPDATE` y `DELETE`
-📌 **Descripción**: Maneja operaciones CRUD dinámicas en cualquier tabla.
-
-#### **📌 Insertar un Producto**
-```sql
-CALL GenericCRUD(
-    'INSERT', 'Products',
-    'ProductName, Description, Price, Stock, CategoryID',
-    "'Neumático Michelin', 'Neumático para autos de alto rendimiento', 120000, 50, 2",
-    NULL
-);
-```
-
-#### **📌 Actualizar un Producto**
-```sql
-CALL GenericCRUD(
-    'UPDATE', 'Products',
-    "Price = 110000, Stock = 45, Description = 'Neumático con nueva versión mejorada'",
-    NULL,
-    'ProductID = 23'
-);
-```
-
-#### **📌 Eliminar un Producto**
-```sql
-CALL GenericCRUD(
-    'DELETE', 'Products', NULL, NULL, 'ProductID = 23'
-);
-```
-
-### **2️⃣ `ProcessPayment(order_id INT)`** - Procesar Pago de una Orden
-📌 **Descripción**: Cambia `IsPaid = TRUE` en la tabla `Orders`.
-```sql
-CALL ProcessPayment(1);
-```
-
----
-
-## 🔹 Disparadores (`TRIGGERS`)
-
-### **1️⃣ `AuditLog_Products_Insert`** - Auditoría de `INSERT`
-📌 **Descripción**: Guarda en `AuditLog` cada vez que se inserta un producto.
-
-### **2️⃣ `AuditLog_Products_Update`** - Auditoría de `UPDATE`
-📌 **Descripción**: Guarda en `AuditLog` los datos antiguos y nuevos cuando un producto es modificado.
-
-### **3️⃣ `AuditLog_Products_Delete`** - Auditoría de `DELETE`
-📌 **Descripción**: Guarda en `AuditLog` los datos antiguos antes de eliminar un producto.
-
-### **4️⃣ `ReduceStockAfterPayment`** - Reducción de Stock tras Pago de una Orden
-📌 **Descripción**: Cuando una orden cambia `IsPaid = TRUE`, reduce automáticamente el stock de los productos comprados.
-
-```sql
-CALL ProcessPayment(1); -- Reduce stock automáticamente
-```
-
----
-
-## 📌 Resumen Final
-✅ **`VIEWS`** → Para reportes de órdenes, ventas, stock y productos más vendidos.
-✅ **`FUNCTIONS`** → Cálculos automáticos como total de órdenes, stock y productos más vendidos.
-✅ **`STORED PROCEDURES`** → CRUD dinámico y procesamiento de pagos.
-✅ **`TRIGGERS`** → Auditoría de cambios y reducción automática de stock.
-
-🚀 **¡Base de datos completamente funcional y optimizada para AutoPartsStore!**# Entrega-Final-SQL-Codehouse
+🚀 **Este sistema proporciona una gestión eficiente de una tienda de autopartes con MySQL.**
