@@ -252,19 +252,20 @@ JOIN Products p ON od.ProductID = p.ProductID;
 
 SELECT * FROM View_OrdersDetails ORDER BY OrderID; -- Vista Detalle de Ordenes ordenado por OrderID
 
--- Ventas por Clientes
-CREATE VIEW View_TotalSalesPerCustomer AS
+-- Ventas por Clientes solo con órdenes pagadas
+CREATE OR REPLACE VIEW View_TotalSalesPerCustomer AS
 SELECT 
     c.CustomerID,
     c.FirstName,
     c.LastName,
     c.Email,
-    SUM(o.TotalAmount) AS TotalSpent
+    COALESCE(SUM(o.TotalAmount), 0) AS TotalSpent
 FROM Orders o
 JOIN Customers c ON o.CustomerID = c.CustomerID
+WHERE o.IsPaid = TRUE
 GROUP BY c.CustomerID, c.FirstName, c.LastName, c.Email;
 
-SELECT * FROM View_TotalSalesPerCustomer; -- Vemos las ventas totales por cliente
+SELECT * FROM View_TotalSalesPerCustomer; -- Vemos las ventas totales por cliente solo de órdenes pagadas
 
 -- Stock de Productos
 CREATE VIEW View_ProductsStock AS
